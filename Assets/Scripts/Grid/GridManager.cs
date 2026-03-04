@@ -19,6 +19,7 @@ public class GridManager : MonoBehaviour
     public GameObject wallPrefab;
 
     private TileType[,] grid;
+    public EnemySpawner spawner;
 
     private void Awake()
     {
@@ -31,6 +32,7 @@ public class GridManager : MonoBehaviour
         InitializeGrid();
         GenerateMap();
         BuildVisual();
+        spawner.SpawnEnemies();
     }
 
     // =========================

@@ -12,6 +12,8 @@ public class EnemyController : MonoBehaviour
     private enum State { Idle, Chase }
     private State currentState = State.Idle;
 
+    
+
     private void Start()
     {
         gridPosition = GridManager.Instance.WorldToGrid(transform.position);
@@ -273,5 +275,13 @@ public class EnemyController : MonoBehaviour
     void UpdateWorldPosition()
     {
         transform.position = GridManager.Instance.GridToWorld(gridPosition.x, gridPosition.y);
+    }
+
+    public void Die()
+    {
+        // Libera o tile lógico
+        GridManager.Instance.SetTile(gridPosition.x, gridPosition.y, TileType.Empty);
+
+        Destroy(gameObject);
     }
 }
