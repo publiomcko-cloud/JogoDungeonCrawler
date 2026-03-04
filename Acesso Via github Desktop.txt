@@ -1,0 +1,86 @@
+PASSO A PASSO – GitHub Desktop
+1️⃣ Instalar
+
+Baixe e instale o GitHub Desktop
+
+Faça login com sua conta do GitHub
+
+🟢 2️⃣ Baixar o projeto (Clone)
+
+Abra o GitHub Desktop
+
+Clique em File → Clone repository
+
+Vá na aba URL
+
+Cole:
+
+https://github.com/publiomcko-cloud/JogoDungeonCrawler.git
+
+Escolha a pasta onde quer salvar
+
+Clique em Clone
+
+✔ Pronto — projeto baixado no seu PC.
+
+🟢 3️⃣ Abrir no Unity
+
+Abra o Unity Hub
+
+Clique em Add Project
+
+Selecione a pasta clonada
+
+Abra o projeto
+
+🟢 4️⃣ Antes de começar a trabalhar (IMPORTANTE)
+
+Sempre faça:
+
+No GitHub Desktop → botão Fetch origin
+
+Se aparecer Pull origin, clique.
+
+✔ Isso baixa as mudanças de outras pessoas.
+
+🟢 5️⃣ Depois de fazer alterações no Unity
+
+Salve tudo no Unity
+
+Volte no GitHub Desktop
+
+Você verá os arquivos modificados
+
+Embaixo, escreva a mensagem do commit:
+
+Exemplo:
+
+feat: movimento básico do player
+
+Clique em Commit to main
+
+🟢 6️⃣ Enviar para o GitHub (Push)
+
+Depois do commit:
+
+Clique em Push origin
+
+✔ Agora está na nuvem.
+
+🔁 Fluxo padrão toda vez que for trabalhar
+
+Fetch / Pull
+
+Trabalhar no projeto
+
+Commit
+
+Push
+
+⚠️ Regra de ouro para evitar conflito
+
+Nunca:
+
+Trabalhar sem fazer Pull antes
+
+Duas pessoas editarem a mesma cena ao mesmo tempos
