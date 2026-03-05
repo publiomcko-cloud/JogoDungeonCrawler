@@ -1,3 +1,8 @@
+Com base na nossa evolução de hoje, o documento de contexto para a IA (context_For_AI.txt / # AI_DEVELOPMENT_GUIDE.md) também precisa de refletir as novas regras arquiteturais e sistemas que consolidámos (como o combate automático, a IA com A* e a instanciação dinâmica de UI/Efeitos).
+
+Aqui está o conteúdo totalmente atualizado para o seu ficheiro context_For_AI.txt. Pode copiar e substituir o texto do seu ficheiro original:
+
+Markdown
 # AI_DEVELOPMENT_GUIDE.md
 
 **Projeto:** 3D Grid-Based Dungeon Crawler (Unity)
@@ -12,7 +17,7 @@ Antes de gerar qualquer código:
 
 1. Considere que **GridManager é a fonte de verdade do estado do mundo**.
 2. **Nunca use `transform.position` como fonte lógica de posição.**
-3. Toda entidade deve possuir **`Vector2Int gridPosition`**.
+3. Toda a entidade deve possuir **`Vector2Int gridPosition`**.
 4. Sempre que mover uma entidade, **atualize primeiro o grid e depois o transform**.
 5. Sempre respeite os sistemas já existentes antes de criar novos.
 6. Prefira **estender sistemas existentes** ao invés de criar novos sistemas paralelos.
@@ -42,37 +47,31 @@ Arquitetura central:
 Grid lógico (2D)
 ↓
 Representação visual (3D)
-```
-
 Toda lógica ocorre no grid.
-
 O mundo 3D é apenas visualização.
 
----
-
-# 2. PRINCÍPIO FUNDAMENTAL DO PROJETO
-
-## GRID É A FONTE DA VERDADE
-
-Tudo depende do `GridManager`.
-
+2. PRINCÍPIO FUNDAMENTAL DO PROJETO
+GRID É A FONTE DA VERDADE
+Tudo depende do GridManager.
 O grid controla:
 
-* ocupação de tiles
-* colisão
-* posição de entidades
-* pathfinding
-* visão de inimigos
+ocupação de tiles
+
+colisão (lógica, sem colliders físicos para entidades)
+
+posição de entidades
+
+pathfinding
+
+visão de inimigos
 
 Estrutura principal:
 
-```csharp
+C#
 TileType[,] tiles
-```
-
 Tipos de tile atuais:
 
-```csharp
+C#
 Empty
 Wall
 Player
@@ -80,465 +79,172 @@ Enemy
 Item
 Water
 Lava
-```
+3. REGRA CRÍTICA DE MOVIMENTO
+Toda a movimentação deve seguir exatamente esta ordem:
 
----
-
-# 3. REGRA CRÍTICA DE MOVIMENTO
-
-Toda movimentação deve seguir exatamente esta ordem:
-
-```text
+Plaintext
 1 atualizar grid (tile antigo → Empty)
 2 atualizar gridPosition
 3 atualizar grid (tile novo → tipo da entidade)
 4 atualizar posição no mundo
-```
-
 Exemplo correto:
 
-```csharp
+C#
 GridManager.Instance.SetTile(oldX, oldY, TileType.Empty);
-
 gridPosition = newPosition;
-
 GridManager.Instance.SetTile(gridPosition.x, gridPosition.y, TileType.Enemy);
-
 UpdateWorldPosition();
-```
-
 Nunca faça:
 
-```csharp
+C#
 transform.position = ...
-```
+sem atualizar o grid primeiro.
 
-sem atualizar o grid.
-
----
-
-# 4. CONVERSÃO GRID ↔ MUNDO
-
+4. CONVERSÃO GRID ↔ MUNDO
 Sempre usar funções do GridManager.
 
-```csharp
+C#
 GridToWorld(x,y)
 WorldToGrid(position)
-```
-
 Exemplo:
 
-```text
+Plaintext
 Grid (10,5) → World (10,0,5)
-```
-
 Eixo Y é altura.
 
----
-
-# 5. SISTEMAS PRINCIPAIS DO JOGO
-
-## GridManager
-
+5. SISTEMAS PRINCIPAIS DO JOGO
+GridManager
 Responsável por:
 
-* armazenar grid
-* validar tiles
-* conversões posição
-* posição do player
+armazenar grid
 
-Funções críticas:
+validar tiles
 
-```csharp
-GetTile()
-SetTile()
-IsWalkable()
-IsInsideGrid()
-GridToWorld()
-WorldToGrid()
-```
+conversões de posição
+
+posição do player
 
 Nunca duplicar lógica de grid fora dele.
 
----
-
-## PlayerController
-
+PlayerController
 Responsável por:
 
-* input
-* movimentação
-* combate por contato
+input de movimento
 
-Player atualiza:
+movimentação restrita à grelha
 
-```csharp
-GridManager.PlayerPosition
-```
+Combate Automático: Ao esbarrar num inimigo, entra em "Engage" e ataca automaticamente por intervalos de tempo. Recuar para um tile vazio aciona o "Disengage".
 
-IA dos inimigos depende disso.
+Busca de alvos através de pura correspondência de gridPosition (sem Physics.OverlapSphere).
 
----
-
-## EnemyController
-
+EnemyController
 Responsável por:
 
-* movimentação
-* IA
-* pathfinding
-* visão
-* ataque
+Movimentação via IA
 
-Estados atuais:
+Pathfinding A* nativo (contorna paredes)
 
-```text
-Idle
-Chase
-```
+Gestão Separada de Combate/Movimento: Possui cronómetros separados para moveInterval e attackInterval.
 
----
+CombatStats & DamageData
+CombatStats: Define atributos base (força, minDamage, maxDamage) e gera um objeto DamageData.
 
-## CombatStats
+DamageData: Pacote de dados imutável com cálculos de mitigação, críticos e falhas.
 
-Define:
+Health
+Controla a vitalidade e a UI das entidades de forma auto-suficiente.
+Funções principais:
 
-```text
-minDamage
-maxDamage
-strength
-critChance
-critMultiplier
-```
+Instanciação dinâmica da sua própria UI (healthBarPrefab).
 
-Gera:
+Feedback visual autônomo através de instanciação ("fire and forget") do damageSplashPrefab.
 
-```csharp
-DamageData
-```
+Trancamento de HP em 0 para evitar bugs de UI.
 
----
+Limpeza do Grid antes de Destruir: Executa o Die() garantindo que o TileType.Empty é aplicado à posição morta.
 
-## Health
-
-Controla vida das entidades.
-
-Funções:
-
-```csharp
-TakeDamage()
-Die()
-```
-
-Se HP chegar a 0:
-
-```csharp
-EnemyController.Die()
-```
-
----
-
-# 6. REGRA CRÍTICA DE MORTE
-
+6. REGRA CRÍTICA DE MORTE
 Quando uma entidade morre:
 
-1 liberar tile
-2 destruir objeto
+liberar tile
 
-Exemplo:
+destruir objeto
 
-```csharp
-public void Die()
-{
-    GridManager.Instance.SetTile(gridPosition.x, gridPosition.y, TileType.Empty);
-    Destroy(gameObject);
-}
-```
+Isso evita tiles bloqueados permanentemente.
 
-Isso evita **tiles bloqueados permanentemente**.
+7. IA DOS INIMIGOS
+A IA possui três pilares que correm de forma independente da UI:
 
----
+1 Visão
+Baseada na distância de Manhattan até ao jogador.
 
-# 7. IA DOS INIMIGOS
+2 Pathfinding
+Algoritmo utilizado:
 
-A IA possui três partes:
-
-### 1 visão
-
-Baseada em:
-
-```text
-distância
-+
-linha de visão
-```
-
-Linha de visão usa:
-
-**Bresenham Line Algorithm**
-
-Bloqueado por:
-
-```text
-Wall
-```
-
----
-
-### 2 pathfinding
-
-Algoritmo usado:
-
-**A***
+*A (A-Star)**
 
 Heurística:
 
-```text
+Plaintext
 Manhattan Distance
-```
+Movimentos permitidos (4 direções, sem diagonais).
+Implementa limite de iterações (maxIterations) para evitar quebra de framerate.
 
-Movimentos permitidos:
+3 Comportamento
+Estados:
 
-```text
-up
-down
-left
-right
-```
+Idle: Movimento aleatório.
 
-Sem diagonais.
+Chase: Perseguição via A*.
 
----
+Combat: Paragem da movimentação e ativação do attackTimer automático (corpo a corpo).
 
-### 3 comportamento
+8. SISTEMA DE VIDA, UI e EFEITOS
+Health (Script): Lida com o dano lógico. Instancia os prefabs visuais.
 
-Estados atuais:
+HealthBar (Script): Apenas ouve o Health. Está blindado matematicamente com Mathf.Clamp01.
 
-```text
-Idle → movimento aleatório
-Chase → perseguição do player
-```
+SimpleSplash (Script): Elemento visual que flutua e se autodestrói (orientado para a câmera isométrica).
 
----
+Regra: A lógica do jogo NUNCA deve parar se houver um erro visual na UI ou Efeitos.
 
-# 8. SPAWN DE INIMIGOS
-
-Gerenciado por:
-
-```text
-EnemySpawner
-```
-
-Dados definidos em:
-
-```text
-EnemyData (ScriptableObject)
-```
-
-Isso permite:
-
-* múltiplos tipos de inimigos
-* pesos de spawn
-* stats diferentes
-* prefabs diferentes
-
----
-
-# 9. SISTEMA DE VIDA E UI
-
+9. CÂMERA
 Script:
 
-```text
-Health
-```
-
-UI:
-
-```text
-HealthBar
-```
-
-Atualização:
-
-```csharp
-fillImage.fillAmount = currentHP / maxHP
-```
-
----
-
-# 10. CÂMERA
-
-Script:
-
-```text
+Plaintext
 CameraFollow
-```
+Características Atuais:
 
-Características:
+Segue o transform do player através de Vector3.SmoothDamp.
 
-* segue player
-* suavização com `Lerp`
-* executa em `LateUpdate`
+Grid Bounds: Possui limites definidos para não mostrar áreas vazias além das extremidades do Grid.
 
-Offset padrão:
+Anti-Clipping: Utiliza Physics.Linecast contra a camada "Wall" para afastar a câmera caso bata no cenário.
 
-```text
-(0,20,-15)
-```
+Offset padrão: (0,20,-15).
 
----
-
-# 11. REGRAS PARA NOVOS SISTEMAS
-
+10. REGRAS PARA NOVOS SISTEMAS
 Antes de criar algo novo:
 
-1. Verifique se já existe sistema similar
-2. Prefira **extensão** ao invés de substituição
-3. Nunca modificar GridManager sem necessidade
+Verifique se já existe sistema similar.
 
-Exemplo correto:
+Prefira extensão ao invés de substituição (ex: focar em estender Componentes já presentes no Prefab).
 
-Adicionar item:
+Nunca modifique GridManager sem necessidade absoluta.
 
-```text
-TileType.Item
-+
-ItemController
-```
+11. EVOLUÇÕES PLANEADAS
+Sistemas futuros planeados para implementar seguindo as regras da grelha (Grid):
 
----
+Sistema de Turnos Híbrido
+Integração entre Ação e Turnos via TurnManager.
 
-# 12. PADRÃO DE COMPONENTES
+Fog of War
+Ocultação de tiles e salas não exploradas.
 
-Entidades devem usar composição.
+Loot System / Drops
+Geração de instâncias no chão que ocupam TileType.Item após a morte (Die()) dos inimigos.
 
-Exemplo:
+Armas, armaduras, poções.
 
-Enemy:
-
-```text
-EnemyController
-Health
-CombatStats
-HealthBar
-```
-
-Player:
-
-```text
-PlayerController
-Health
-CombatStats
-HealthBar
-```
-
----
-
-# 13. PADRÃO DE SCRIPTS
-
-Scripts devem ter responsabilidades claras.
-
-Evitar scripts gigantes.
-
-Preferir:
-
-```text
-EnemyController → IA
-CombatStats → dano
-Health → vida
-HealthBar → UI
-```
-
----
-
-# 14. ERROS COMUNS A EVITAR
-
-### 1 mover objeto sem atualizar grid
-
-Isso quebra:
-
-* pathfinding
-* colisão
-* IA
-
----
-
-### 2 destruir inimigo sem liberar tile
-
-Isso cria tiles bloqueados.
-
----
-
-### 3 usar transform.position para lógica
-
-Sempre usar:
-
-```text
-gridPosition
-```
-
----
-
-### 4 permitir movimento diagonal
-
-Sistema atual é **4-direções apenas**.
-
----
-
-# 15. BOAS PRÁTICAS
-
-Preferir:
-
-```text
-Vector2Int
-```
-
-para posições lógicas.
-
-Evitar floats para grid.
-
----
-
-# 16. EVOLUÇÕES PLANEJADAS
-
-Sistemas futuros planejados:
-
-### dungeon procedural
-
-* salas
-* corredores
-* portas
-
----
-
-### fog of war
-
-exploração progressiva.
-
----
-
-### sistema de turnos
-
-integração com:
-
-```text
-TurnManager
-```
-
----
-
-### loot system
-
-* armas
-* armaduras
-* poções
-
----
-
-### múltiplos inimigos
-
-exemplos:
-
-```text
-melee
-```
+Dungeon Procedural (Salas)
+Transitar da atual geração dispersa de blocos para algoritmos de salas e corredores.

@@ -1,18 +1,18 @@
 # Jogo Dungeon Crawler - Full Project Context
 
 ## Project Overview
-A grid-based dungeon crawler game built in Unity with procedurally generated maps, turn-based combat system, enemy AI with pathfinding, and player character control. The game uses a tile-based grid system with depth-based 3D visualization.
+Um jogo dungeon crawler baseado em grid construído em Unity com mapas gerados proceduralmente, sistema de combate automático baseado em turnos/tempo real, IA de inimigos com pathfinding avançado e controlo de personagem do jogador. O jogo utiliza um sistema de grelha (grid) baseado em tiles com visualização 3D baseada em profundidade.
 
-**Current Working File:** `CameraFollow.cs` (Core system for camera tracking)
+**Estado Atual:** Refatoração do núcleo (Core) concluída (Câmera, Combate Automático e IA de Inimigos).
 
 ---
 
 ## Project Structure
-```
 Assets/
 ├── Scripts/
 │   ├── Core/
-│   │   ├── CameraFollow.cs      ← CURRENT FILE
+│   │   ├── CameraFollow.cs
+
 │   │   ├── TurnManager.cs
 │   │   └── EnemySpawner.cs
 │   ├── Entities/
@@ -23,6 +23,7 @@ Assets/
 │   │   ├── DamageData.cs
 │   │   ├── HealthBar.cs
 │   │   ├── EnemyData.cs
+│   │   └── SimpleSplash.cs      ← NOVO (Feedback visual de dano)
 │   └── Grid/
 │       └── GridManager.cs
 │   └── TileType.cs (enum)
@@ -31,451 +32,112 @@ Assets/
 ├── Materials/
 ├── Enemys/
 └── Settings/
-```
+
 
 ---
 
 ## Core Systems Architecture
 
 ### 1. Grid System (GridManager.cs)
-**Singleton that manages the game world**
+**Singleton que gere o estado do mundo do jogo**
 
 **Key Features:**
-- **Grid Dimensions:** 100x100 tiles (configurable)
+- **Grid Dimensions:** 100x100 tiles (configurável)
 - **Tile Types:** Empty, Wall, Player, Enemy, Item, Water, Lava
-- **Coordinate System:** Uses Vector2Int for grid positions, Vector3 for world positions
-- **Procedural Generation:** Random walls with safe zone around center (radius = 3 tiles)
+- **Coordinate System:** Usa Vector2Int para posições lógicas na grelha, Vector3 para posições no mundo
+- **Procedural Generation:** Paredes aleatórias com zona segura no centro (raio = 3 tiles)
 
-**Key Methods:**
-```csharp
-// Position conversion
-WorldToGrid(Vector3 position) → Vector2Int
-GridToWorld(int x, int z) → Vector3
-
-// Tile management
-SetTile(int x, int z, TileType type)
-GetTile(int x, int z) → TileType
-IsWalkable(int x, int z) → bool
-IsInsideGrid(int x, int z) → bool
-
-// Player tracking
-SetPlayerPosition(Vector2Int pos)
-PlayerPosition { get; } → Vector2Int
-```
-
-**Map Generation:**
-- **Borders:** Walls on all edges
-- **Internal Walls:** 20% random placement outside 3-tile safe zone
-- **Visual:** Instantiates wall prefabs in 3D space
+**Regra de Ouro do Movimento:**
+Toda a entidade deve primeiro limpar o seu tile atual, atualizar a sua posição na grelha, reclamar o novo tile e só depois atualizar a sua posição visual no mundo 3D.
 
 ---
 
-### 2. CameraFollow.cs (Current File)
-**Smooth third-person camera following the player**
+### 2. CameraFollow.cs 
+**Câmera suave na terceira pessoa que segue o jogador com proteção de limites e colisões.**
 
-```csharp
-public class CameraFollow : MonoBehaviour
-{
-    public Transform target;                    // Player transform
-    public Vector3 offset = new Vector3(0, 20, -15);  // Camera offset
-    public float smoothSpeed = 5f;             // Lerp smoothing factor
-
-    void LateUpdate()
-    {
-        if (target == null) return;
-        
-        Vector3 desiredPosition = target.position + offset;
-        Vector3 smoothedPosition = Vector3.Lerp(
-            transform.position,
-            desiredPosition,
-            smoothSpeed * Time.deltaTime
-        );
-        
-        transform.position = smoothedPosition;
-    }
-}
-```
-
-**Purpose:**
-- Follows player from elevated isometric perspective (Y=20, Z=-15)
-- Uses LateUpdate for smooth camera tracking
-- Linear interpolation with Time.deltaTime for frame-rate independence
-
-**Current Issues/Improvements Possible:**
-- Linear Lerp might feel jerky at high smoothSpeed values
-- No bounds checking (camera can follow beyond grid edges)
-- No collision avoidance (can clip through walls/scenery)
-- Static offset angle (no rotation/zoom)
+**Key Features:**
+- **SmoothDamp Movement:** Substituiu o `Lerp` linear por `Vector3.SmoothDamp` para movimentos orgânicos com aceleração e desaceleração.
+- **Grid Bounds:** A câmera respeita os limites da grelha (ex: min 0,0 e max 99,99) e não mostra o vazio.
+- **Collision Avoidance:** Usa `Physics.Linecast` para detetar a Layer "Wall", impedindo que a câmera atravesse o cenário.
+- **Isometric Offset:** Mantém o desvio padrão de (0, 20, -15).
 
 ---
 
 ### 3. Player System (PlayerController.cs)
-**Handles player movement and combat**
+**Gere o movimento do jogador e o sistema de combate automático corpo a corpo.**
 
 **Key Features:**
-- **Input:** WASD keys for movement (up/down/left/right)
-- **Grid-Based:** Moves one tile per input
-- **Combat:** Melee attack on adjacent enemies
-- **Position Tracking:** Updates GridManager with player location
-
-**Movement Logic:**
-1. Player presses WASD
-2. Calculate target tile
-3. Check if inside grid
-4. Check tile type:
-   - Enemy → Attack
-   - Walkable (Empty/Item) → Move
-   - Wall/Blocked → No movement
-
-**Attack Mechanics:**
-- Uses Physics.OverlapSphere to detect enemies
-- Retrieves Health and CombatStats components
-- Generates damage data and applies it
-- Only hits first enemy in radius
+- **Input:** Teclas WASD para movimento (cima/baixo/esquerda/direita).
+- **Auto-Combat System:** Se o jogador esbarrar num inimigo, entra em estado de `Engage`, atacando-o repetidamente com base num intervalo de tempo (`attackInterval`).
+- **Disengage:** O jogador sai automaticamente do combate se recuar para um espaço livre (`TileType.Empty`) ou se a distância para o alvo (Manhattan) for maior que 1.
+- **Grid-Based Targeting:** Substituiu verificações baseadas em colisores físicos (`Physics.OverlapSphere`) por lógica pura de adjacência na grelha.
 
 ---
 
 ### 4. Enemy System (EnemyController.cs)
-**AI-driven hostile entities with vision, pathfinding, and combat**
+**Entidades hostis movidas por IA com visão, pathfinding A* genuíno e combates independentes.**
 
 **Key Features:**
-- **Vision Range:** 8 tiles (configurable)
-- **State Machine:** Idle and Chase states
-- **Movement:** Every 0.5s (configurable moveInterval)
-- **AI Behaviors:** Line-of-sight detection, A* pathfinding, random idle movement
-
-**Vision System:**
-```csharp
-CanSeePlayer() → bool
-// Checks distance AND line-of-sight (Bresenham line algorithm)
-// Blocked by walls
-```
-
-**Pathfinding:**
-```csharp
-AStar(Vector2Int start, Vector2Int goal) → List<Vector2Int>
-// Complete A* implementation with:
-// - gScore tracking
-// - heuristic function (Manhattan distance)
-// - neighbor detection (4-direction cardinal)
-// - path reconstruction
-```
-
-**Movement Behavior:**
-- **Chase:** Uses A* to pathfind to player, moves to next tile in path
-- **Idle:** Random movement in cardinal directions
-- **Attack:** Direct attack if adjacent to player
-
-**Statistics:**
-- Spawned by EnemySpawner with configurable stats per type
-- Health system with health bar UI
-- Combat stats (strength, minDamage, maxDamage, crit chance)
+- **Separated Timers:** O intervalo de movimento (`moveInterval`) é independente do intervalo de ataque (`attackInterval`), permitindo variações estratégicas (ex: inimigos rápidos a andar, mas lentos a atacar).
+- **Vision Range:** 8 tiles (configurável).
+- **A* Pathfinding:** Algoritmo A* completo, utilizando Manhattan Distance. Os inimigos sabem contornar obstáculos. Inclui um limite máximo de iterações por frame para prevenir estrangulamentos na performance (lag) caso o jogador se encurrale.
+- **Auto-Retaliation:** Quando um inimigo ataca o jogador, ele sinaliza o jogador (`player.OnAttackedBy()`), permitindo que o jogador riposte automaticamente se estiver inativo.
 
 ---
 
-### 5. Combat System
+### 5. Combat System & Visual Feedback
 
-#### CombatStats.cs
-**Character base stats and damage generation**
-
-```csharp
-public class CombatStats : MonoBehaviour
-{
-    public int strength = 5;              // Base stat bonus
-    public int minDamage = 2;             // Damage range
-    public int maxDamage = 5;
-    
-    public float critChance = 0.1f;       // 10% critical chance
-    public float critMultiplier = 2f;     // Critical multiplier
-    
-    public DamageData GenerateDamage()    // Random damage per attack
-}
-```
-
-#### DamageData.cs
-**Immutable damage information structure**
-
-```csharp
-[System.Serializable]
-public class DamageData
-{
-    public int baseDamage;
-    public bool isCritical;
-    public float criticalMultiplier;
-    
-    public int FinalDamage()
-    {
-        return isCritical ? 
-            Mathf.RoundToInt(baseDamage * criticalMultiplier) : 
-            baseDamage;
-    }
-}
-```
+#### CombatStats.cs & DamageData.cs
+Define estatísticas base (força, dano mínimo/máximo, chance de crítico) e gera o pacote imutável `DamageData`.
 
 #### Health.cs
-**Enemy/Player health tracking and death**
+**O pilar da vitalidade e inicialização da UI.**
+- Inicializa de forma segura no `Awake()` para prevenir problemas matemáticos na UI de frames iniciais.
+- **Dynamic UI Instantiation:** Instancia automaticamente o `healthBarPrefab` como elemento filho e estabelece a ligação.
+- **Visual Feedback:** Instancia o `damageSplashPrefab` (círculo vermelho de dano) de forma segura ("fire and forget") através da classe `SimpleSplash.cs`.
+- Tranca os valores de vida num mínimo de 0 para prevenir problemas de renderização da interface.
 
-```csharp
-public int maxHP = 10;
-public int currentHP;
-public bool IsDead => currentHP <= 0;
-
-public void TakeDamage(DamageData damage)
-{
-    int finalDamage = damage.FinalDamage();
-    currentHP -= finalDamage;
-    
-    // Log damage
-    Debug.Log($"[{gameObject.name}] took {finalDamage} damage " + 
-              $"{(damage.isCritical ? "CRITICAL!" : "")} (HP: {currentHP})");
-    
-    // Death handling
-    if (currentHP <= 0)
-    {
-        // Enemy: Call Die()
-        // Player: Destroy()
-    }
-}
-
-void Die()
-{
-    // Call EnemyController.Die()
-    Destroy(gameObject);
-}
-```
+#### SimpleSplash.cs (Feedback Visual Minimalista)
+Script independente que faz um sprite crescer e desvanecer rapidamente no espaço 3D (orientado pela perspetiva isométrica) após um impacto.
 
 #### HealthBar.cs
-**UI health bar visualization**
-
-```csharp
-public Health targetHealth;      // Reference to Health component
-public Image fillImage;           // UI Image for fill display
-
-void Update()
-{
-    float percent = (float)targetHealth.currentHP / targetHealth.maxHP;
-    fillImage.fillAmount = percent;
-}
-```
+Utiliza um sistema defensivo com `Mathf.Clamp01` para preencher com precisão as percentagens na imagem da UI sem quebrar quando ocorrem valores de HP negativos ou excessivos.
 
 ---
 
 ### 6. Enemy Spawning & Data
-
-#### EnemyData.cs
-**Scriptable Object defining enemy types**
-
-```csharp
-[CreateAssetMenu(menuName = "Game/Enemy Data")]
-public class EnemyData : ScriptableObject
-{
-    public string enemyName;
-    public GameObject prefab;
-    
-    public int spawnWeight = 1;    // Weighted random spawn
-    
-    // Stats
-    public int maxHP = 5;
-    public int strength = 2;
-    public int minDamage = 1;
-    public int maxDamage = 3;
-}
-```
-
-#### EnemySpawner.cs
-**Spawns configured number of weighted-random enemies**
-
-```csharp
-public List<EnemyData> enemyTypes;      // Available enemy types
-public int enemyCount = 20;             // Total enemies to spawn
-
-void SpawnEnemies()               // Called on Start
-void SpawnSingleEnemy()
-// 1. Find random free tile (100 attempts)
-// 2. Pick enemy by weighted probability
-// 3. Instantiate prefab
-// 4. Apply EnemyData stats to Health/CombatStats
-
-EnemyData GetWeightedRandomEnemy()
-// Cumulative probability selection
-```
+- **EnemyData (Scriptable Object):** Define propriedades do inimigo, modelos e pesos probabilísticos para instanciação.
+- **EnemySpawner:** Gera 20 inimigos de forma aleatória em posições livres na grelha no início do jogo.
 
 ---
 
 ### 7. Turn System (TurnManager.cs)
-**Manages player vs enemy turn flow**
-
-```csharp
-public static TurnManager Instance;
-public bool playerTurn = true;
-
-public delegate void OnEnemyTurn();
-public event OnEnemyTurn EnemyTurnEvent;
-
-public void EndPlayerTurn()
-{
-    playerTurn = false;
-    EnemyTurnEvent?.Invoke();           // Signal enemies to move
-    Invoke(nameof(StartPlayerTurn), 0.2f);  // Delay before next turn
-}
-
-void StartPlayerTurn()
-{
-    playerTurn = true;
-}
-```
-
-**Current State:**
-- Turn system defined but integration with movement appears incomplete
-- EnemyController has moveInterval timer rather than listening to turn events
-- Could be improved for true turn-based gameplay
-
----
-
-### 8. Game Data & Enums
-
-#### TileType.cs
-```csharp
-public enum TileType
-{
-    Empty = 0,    // Walkable empty space
-    Wall = 1,     // Collider blocking
-    Player = 2,   // Player character
-    Enemy = 3,    // Enemy character
-    Item = 4,     // Pickup item (future)
-    Water = 5,    // Hazard (future)
-    Lava = 6      // Hazard (future)
-}
-```
-
----
-
-## Key Architectural Patterns Used
-
-### 1. Singleton Pattern
-```csharp
-public static GridManager Instance;
-public static TurnManager Instance;
-```
-Global access to critical systems
-
-### 2. Component-Based Design
-- Health.cs
-- CombatStats.cs
-- EnemyController.cs
-- PlayerController.cs
-All attached to GameObjects and communicate via GetComponent()
-
-### 3. Events/Delegates
-```csharp
-public event OnEnemyTurn EnemyTurnEvent;  // TurnManager
-```
-
-### 4. Scriptable Objects
-```csharp
-EnemyData.cs    // Defines enemy configurations
-```
-
-### 5. State Machine
-```csharp
-private enum State { Idle, Chase }  // EnemyController
-```
+**Coordenador do fluxo de turnos (Atualmente Híbrido).**
+- O jogo evoluiu de turnos rígidos para uma estrutura de grelha em tempo real com tempos de arrefecimento (cooldowns) no combate e no movimento (A* e ataques automáticos utilizam contadores dinâmicos).
 
 ---
 
 ## Coordinate Systems
 
 ### Grid Coordinates (Vector2Int)
-- **Type:** Integer grid position
-- **Range:** (0,0) to (width-1, height-1)
-- **Usage:** GridManager, movement calculation, tile tracking
-- **Axes:** x (horizontal), z (vertical/depth)
+- **Type:** Posição lógica em números inteiros.
+- **Range:** (0,0) a (width-1, height-1).
+- **Usage:** GridManager, cálculos de A*, rastreio de alvos.
 
 ### World Coordinates (Vector3)
-- **Type:** Unity 3D world space floats
-- **Conversion:** GridToWorld(x, z) = Vector3(x, 1, z)
-- **Y-Axis:** Always 1.0 (2D top-down with visual height)
-- **Camera Offset:** (0, 20, -15) for isometric view
-
-### Important:
-- GridToWorld uses `z` parameter but positions it as Z-axis in 3D
-- WorldToGrid rounds X and Z components from Vector3
-- Player.gridPosition tracked separately from transform.position
-
----
-
-## Current Game Flow
-
-1. **Start:**
-   - GridManager initializes 100x100 grid
-   - Procedural map generation (borders + internal walls)
-   - Wall prefabs instantiated visually
-   - Player spawned at center, registers with GridManager
-   - Camera assigned target = player.transform
-   - EnemySpawner creates 20 weighted-random enemies at free tiles
-
-2. **Update (Each Frame):**
-   - Camera smoothly follows player 5 units/sec
-   - Enemy movement timer accumulates
-   - Every 0.5s: Enemy updates AI state and moves (if visible)
-   - Player input checks for WASD keys
-
-3. **Player Action:**
-   - Player presses movement key
-   - Check target tile validity
-   - If enemy: call Attack() (generate damage → TakeDamage)
-   - If walkable: move, update GridManager, update world position
-   - Camera follows player
-
-4. **Enemy Action:**
-   - Check if player visible (distance + LoS)
-   - If visible: A* pathfind to player, move to next step
-   - If not visible: random movement
-   - Can attack player if adjacent
-
-5. **Combat Resolution:**
-   - CombatStats.GenerateDamage() → random roll + strength + crit check
-   - Health.TakeDamage(damage) → reduce HP, log damage
-   - If HP ≤ 0: call Die() → Destroy gameobject
+- **Type:** Espaço 3D flutuante do Unity.
+- **Conversion:** `GridToWorld(x, z)` e `WorldToGrid(position)`.
+- Apenas atualizado *após* as validações de movimento da grelha.
 
 ---
 
 ## Known Issues & Improvement Opportunities
 
-### CameraFollow.cs Specific:
-1. **No Bounds Checking** - Camera follows beyond grid edges
-2. **Linear Lerp Only** - No easing functions for different feel
-3. **Static Offset** - Always same angle, no rotation/zoom
-4. **No Collision** - Can clip through walls
-5. **Hard-coded Values** - Offset and speed not designer-friendly
-
 ### System-Wide:
-1. **Turn System Not Integrated** - Enemies use timer, not turn events
-2. **No Fog of War** - All map visible regardless of player position
-3. **A* Not Optimized** - Full search each frame could lag with many enemies
-4. **Movement Feels Instant** - No walking animation/transition
-5. **No Inventory/Items** - Item tiles defined but unused
-6. **No Hazard Tiles** - Water/Lava defined but not implemented
-
----
-
-## Code Quality Notes
-
-- **Consistent Naming:** PascalCase for classes/methods, camelCase for fields
-- **Comment Organization:** Section dividers (// SECTION NAME)
-- **Error Handling:** Null checks present (GridManager.Instance checks)
-- **Serialization:** Public fields for inspector tweaking
-- **Structure:** Logical method grouping by functionality
-- **Performance:** Mostly efficient, some A* optimization possible
-
----
-
-## Next Steps for Development
-
-1. **Immediate:** Fix turn-based system integration
-2. **Short-term:** Improve camera with bounds + easing
-3. **Medium-term:** Add player stats/inventory system
-4. **Long-term:** Procedural dungeon generation, multiple levels, boss fights
+1. **No Fog of War:** Todo o mapa é visível de momento. Explorar a grelha por salas e ocultar as não descobertas seria benéfico.
+2. **No Drops/Loot System:** Inimigos desaparecem sem largar itens (embora o `TileType.Item` já esteja preparado na arquitetura).
+3. **Turn System Purgatory:** O script TurnManager.cs precisa de ser adaptado formalmente ou removido para acomodar perfeitamente este modelo de combate de ação com tempo tático.
+4. **No Hazard Tiles:** Water/Lava estão definidos na grelha, mas não implementados logicamente ou visualmente no terreno procedural.
 
 ---
 
@@ -484,38 +146,27 @@ private enum State { Idle, Chase }  // EnemyController
 | File | Purpose | Key Classes |
 |------|---------|-------------|
 | GridManager.cs | World state & tile management | GridManager(Singleton) |
-| CameraFollow.cs | Player tracking camera | CameraFollow |
-| PlayerController.cs | Player input & movement | PlayerController |
-| EnemyController.cs | AI pathfinding & combat | EnemyController |
-| TurnManager.cs | Turn flow coordination | TurnManager(Singleton) |
-| EnemySpawner.cs | Enemy instantiation | EnemySpawner |
-| Health.cs | HP tracking | Health |
-| CombatStats.cs | Damage generation | CombatStats |
-| HealthBar.cs | HP UI visualization | HealthBar |
+| CameraFollow.cs | Player tracking with bounds | CameraFollow |
+| PlayerController.cs | Player auto-combat & grid movement | PlayerController |
+| EnemyController.cs | A* pathfinding & split combat logic | EnemyController |
+| SimpleSplash.cs | Visual damage feedback ("fire & forget") | SimpleSplash |
+| Health.cs | HP tracking, UI & Death spawning | Health |
+| CombatStats.cs | Damage generation logic | CombatStats |
+| HealthBar.cs | Protected HP UI visualization | HealthBar |
 | EnemyData.cs | Enemy configuration | EnemyData(ScriptableObject) |
-| TileType.cs | Tile enumeration | TileType(Enum) |
+| EnemySpawner.cs | Procedural enemy instantiation | EnemySpawner |
 
 ---
 
 ## Example Game Object Hierarchy (Expected)
 
-```
 Scene
 ├── GridManager (with EnemySpawner child)
 ├── TurnManager (Singleton)
 ├── MainCamera (with CameraFollow script)
-├── Player (PlayerController, Health, CombatStats, GameObects)
-│   └── HealthBar (UI Canvas)
+├── Player (PlayerController, Health, CombatStats)
+│   └── CanvasHealthBar(Clone) (Instanciado via Health.cs)
 ├── Enemy_1 (EnemyController, Health, CombatStats)
-│   └── HealthBar
-├── Enemy_2 (EnemyController, Health, CombatStats)
-│   └── HealthBar
+│   └── CanvasHealthBar(Clone) (Instanciado via Health.cs)
 ├── ... (20 total enemies)
 └── Visual Walls (Instantiated from wallPrefab)
-```
-
----
-
-**Document Version:** 1.0 - Complete project context snapshot
-**Generated:** March 4, 2026
-**Project:** Jogo Dungeon Crawler (Dungeon Crawler Game)
