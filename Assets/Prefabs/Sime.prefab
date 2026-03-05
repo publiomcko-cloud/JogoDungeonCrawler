@@ -127,8 +127,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5773e599099455144ab962a6e6febbf9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EnemyController
-  visionRange: 8
+  gridPosition: {x: 0, y: 0}
   moveInterval: 0.5
+  visionRange: 8
+  attackInterval: 1
+  moveSpeed: 10
 --- !u!114 &3404909844667269100
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -144,6 +147,8 @@ MonoBehaviour:
   maxHP: 20
   currentHP: 0
   healthBarPrefab: {fileID: 8758824405303837862, guid: 1d2921ab36d026048aec0eb4ab3bf061, type: 3}
+  damageSplashPrefab: {fileID: 2423425208878226990, guid: 9eb21f342635f4142adab43ddbad7d94, type: 3}
+  splashOffset: {x: 0, y: 1.5, z: 0}
 --- !u!114 &5709637001757750671
 MonoBehaviour:
   m_ObjectHideFlags: 0
