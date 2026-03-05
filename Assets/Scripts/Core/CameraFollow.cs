@@ -6,37 +6,54 @@ public class CameraFollow : MonoBehaviour
     [Tooltip("O Transform do Player que a câmera deve seguir.")]
     public Transform target;
     
-    [Tooltip("Posição da câmera em relação ao alvo (Padrão: 0, 20, -15).")]
+    [Tooltip("Posição base da câmera em relação ao alvo (Padrão: 0, 20, -15).")]
     public Vector3 offset = new Vector3(0, 20f, -15f);
 
     [Header("Movement Settings")]
     [Tooltip("Tempo aproximado para a câmera alcançar o alvo. Valores menores deixam a câmera mais ágil.")]
     public float smoothTime = 0.25f;
-    private Vector3 velocity = Vector3.zero; // Usado internamente pelo SmoothDamp
+    private Vector3 velocity = Vector3.zero;
+
+    [Header("Zoom Settings")]
+    [Tooltip("Ativa/Desativa o controle de zoom pelo scroll do mouse.")]
+    public bool enableZoom = true;
+    [Tooltip("Velocidade com que o scroll aproxima ou afasta a câmera.")]
+    public float zoomSpeed = 2f;
+    [Tooltip("Multiplicador mínimo (o quão perto a câmera pode chegar). 0.5 = Metade da distância.")]
+    public float minZoom = 0.4f;
+    [Tooltip("Multiplicador máximo (o quão longe a câmera pode ir). 2.0 = Dobro da distância.")]
+    public float maxZoom = 1.5f;
+    
+    // Variável interna que guarda o nível de zoom atual (1.0 = offset original)
+    private float currentZoomMultiplier = 1.0f;
 
     [Header("Grid Bounds")]
     [Tooltip("Ative para impedir que a câmera siga o jogador para fora dos limites do grid.")]
     public bool useGridBounds = true;
-    
-    [Tooltip("Limites mínimos do grid no mundo (X, Z).")]
     public Vector2 minBounds = new Vector2(0, 0);
-    
-    [Tooltip("Limites máximos do grid no mundo (X, Z). Para um grid 100x100, use 99, 99.")]
     public Vector2 maxBounds = new Vector2(99, 99);
 
     [Header("Collision Handling")]
     [Tooltip("Ative para impedir que a câmera atravesse paredes ou cenários.")]
     public bool avoidClipping = true;
-    
-    [Tooltip("A Layer que representa os obstáculos (ex: Walls).")]
     public LayerMask obstacleLayer;
-    
-    [Tooltip("Distância mínima que a câmera deve manter da parede ao colidir.")]
     public float collisionOffset = 0.5f;
 
     void LateUpdate()
     {
         if (target == null) return;
+
+        // --- Lógica de Zoom (Scroll do Mouse) ---
+        if (enableZoom)
+        {
+            float scroll = Input.GetAxis("Mouse ScrollWheel");
+            if (scroll != 0f)
+            {
+                // Subtrai porque rolar a roda do rato para "frente" (positivo) aproxima (zoom menor)
+                currentZoomMultiplier -= scroll * zoomSpeed;
+                currentZoomMultiplier = Mathf.Clamp(currentZoomMultiplier, minZoom, maxZoom);
+            }
+        }
 
         // 1. Pega a posição base do alvo (Player)
         Vector3 focusPosition = target.position;
@@ -48,23 +65,21 @@ public class CameraFollow : MonoBehaviour
             focusPosition.z = Mathf.Clamp(focusPosition.z, minBounds.y, maxBounds.y);
         }
 
-        // 3. Calcula a posição ideal da câmera com o offset
-        Vector3 desiredPosition = focusPosition + offset;
+        // 3. Calcula a posição ideal com o offset afetado pelo multiplicador de zoom
+        Vector3 zoomedOffset = offset * currentZoomMultiplier;
+        Vector3 desiredPosition = focusPosition + zoomedOffset;
 
-        // 4. Prevenção de Clipping (Colisão) com obstáculos
+        // 4. Prevenção de Clipping (Colisão)
         if (avoidClipping)
         {
             RaycastHit hit;
-            // Lança um raio do jogador (foco) até onde a câmera quer ir
             if (Physics.Linecast(focusPosition, desiredPosition, out hit, obstacleLayer))
             {
-                // Se bater em uma parede, a posição desejada passa a ser o ponto de impacto,
-                // afastado levemente na direção do jogador para não entrar na malha do 3D
                 desiredPosition = hit.point + (focusPosition - desiredPosition).normalized * collisionOffset;
             }
         }
 
-        // 5. Move a câmera suavemente para a posição final usando SmoothDamp
+        // 5. Move a câmera suavemente
         transform.position = Vector3.SmoothDamp(
             transform.position, 
             desiredPosition, 

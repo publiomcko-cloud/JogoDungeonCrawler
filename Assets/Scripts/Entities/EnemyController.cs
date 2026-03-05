@@ -1,5 +1,5 @@
 using UnityEngine;
-using System.Collections.Generic; // Necessário para List e HashSet usados no A*
+using System.Collections.Generic;
 
 [RequireComponent(typeof(Health), typeof(CombatStats))]
 public class EnemyController : MonoBehaviour
@@ -8,19 +8,21 @@ public class EnemyController : MonoBehaviour
     public Vector2Int gridPosition;
     
     [Header("AI Movement Settings")]
-    [Tooltip("Intervalo em segundos entre cada passo do inimigo.")]
     public float moveInterval = 0.5f;
     private float moveTimer = 0f;
-    [Tooltip("Distância máxima que o inimigo detecta o player.")]
     public int visionRange = 8;
 
     [Header("AI Combat Settings")]
-    [Tooltip("Intervalo em segundos entre cada ataque do inimigo.")]
     public float attackInterval = 1.0f;
     private float attackTimer = 0f;
     
     [Header("Visuals")]
     public float moveSpeed = 10f;
+    
+    [Header("Fog of War")]
+    [Tooltip("Distância máxima em tiles para o inimigo aparecer na tela")]
+    public int visibleToPlayerRange = 7; 
+    private bool isVisible = true;
 
     private Health health;
     private CombatStats combatStats;
@@ -28,14 +30,13 @@ public class EnemyController : MonoBehaviour
     private enum State { Idle, Chase }
     private State currentState = State.Idle;
 
-    // Classe interna para os cálculos do algoritmo A*
     private class PathNode
     {
         public Vector2Int Position;
-        public int GCost; // Custo do início até aqui
-        public int HCost; // Custo estimado (Manhattan) daqui até o alvo
+        public int GCost; 
+        public int HCost; 
         public int FCost => GCost + HCost;
-        public PathNode Parent; // Usado para refazer o caminho de volta
+        public PathNode Parent;
 
         public PathNode(Vector2Int pos) { Position = pos; }
     }
@@ -57,6 +58,7 @@ public class EnemyController : MonoBehaviour
         if (health != null && health.IsDead) return;
 
         UpdateVisualPosition();
+        UpdateFogOfWarVisibility(); // NOVO: Checa se deve renderizar o inimigo
 
         Vector2Int playerPos = GridManager.Instance.PlayerPosition;
         int distToPlayer = ManhattanDistance(gridPosition, playerPos);
@@ -89,6 +91,35 @@ public class EnemyController : MonoBehaviour
         }
     }
 
+    // --- NOVA FUNÇÃO: FOG OF WAR ---
+    void UpdateFogOfWarVisibility()
+    {
+        // Calcula a distância real no grid até o jogador
+        int dist = ManhattanDistance(gridPosition, GridManager.Instance.PlayerPosition);
+        bool shouldBeVisible = dist <= visibleToPlayerRange;
+
+        // Só faz a operação pesada de ligar/desligar componentes se o estado mudar
+        if (shouldBeVisible != isVisible)
+        {
+            isVisible = shouldBeVisible;
+
+            // Liga ou desliga todos os renderizadores 3D/2D do inimigo
+            Renderer[] renderers = GetComponentsInChildren<Renderer>();
+            foreach(var r in renderers)
+            {
+                r.enabled = isVisible;
+            }
+
+            // Liga ou desliga as UIs (como a Barra de Vida)
+            Canvas[] canvases = GetComponentsInChildren<Canvas>();
+            foreach(var c in canvases)
+            {
+                c.enabled = isVisible;
+            }
+        }
+    }
+    // --------------------------------
+
     void PerformMovement(Vector2Int playerPos, int distToPlayer)
     {
         if (distToPlayer <= visionRange)
@@ -120,14 +151,12 @@ public class EnemyController : MonoBehaviour
 
     void ChasePlayer(Vector2Int playerPos)
     {
-        // Usa o algoritmo A* para achar o melhor caminho contornando paredes
         List<Vector2Int> path = FindPath(gridPosition, playerPos);
 
         if (path != null && path.Count > 0)
         {
             Vector2Int nextStep = path[0];
 
-            // Garante que não vai tentar pisar em cima do player (o combate lida com a colisão lógica)
             if (nextStep != playerPos && GridManager.Instance.IsWalkable(nextStep.x, nextStep.y))
             {
                 MoveTo(nextStep);
@@ -135,12 +164,10 @@ public class EnemyController : MonoBehaviour
         }
         else
         {
-            // Se não há caminho possível (player cercado de paredes), o inimigo tenta pelo menos andar aleatório
             RandomMove();
         }
     }
 
-    // --- ALGORITMO A* (A-STAR) ---
     List<Vector2Int> FindPath(Vector2Int startPos, Vector2Int targetPos)
     {
         List<PathNode> openList = new List<PathNode>();
@@ -150,13 +177,12 @@ public class EnemyController : MonoBehaviour
         openList.Add(startNode);
 
         int iterations = 0;
-        int maxIterations = 300; // Proteção contra loops infinitos em mapas muito complexos
+        int maxIterations = 300; 
 
         while (openList.Count > 0 && iterations < maxIterations)
         {
             iterations++;
 
-            // Pega o nó com o menor custo F
             PathNode currentNode = openList[0];
             for (int i = 1; i < openList.Count; i++)
             {
@@ -169,13 +195,11 @@ public class EnemyController : MonoBehaviour
             openList.Remove(currentNode);
             closedList.Add(currentNode.Position);
 
-            // Se achou o alvo, reconstrói o caminho
             if (currentNode.Position == targetPos)
             {
                 return RetracePath(startNode, currentNode);
             }
 
-            // Checa vizinhos nas 4 direções
             Vector2Int[] directions = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
             foreach (Vector2Int dir in directions)
             {
@@ -184,7 +208,6 @@ public class EnemyController : MonoBehaviour
                 if (!GridManager.Instance.IsInsideGrid(neighborPos.x, neighborPos.y)) continue;
                 if (closedList.Contains(neighborPos)) continue;
 
-                // O vizinho precisa ser "caminhável" OU ser a posição do próprio alvo (para o caminho poder chegar até ele)
                 bool isWalkable = GridManager.Instance.IsWalkable(neighborPos.x, neighborPos.y) || neighborPos == targetPos;
                 if (!isWalkable) continue;
 
@@ -207,7 +230,7 @@ public class EnemyController : MonoBehaviour
             }
         }
         
-        return null; // Caminho não encontrado
+        return null; 
     }
 
     List<Vector2Int> RetracePath(PathNode startNode, PathNode endNode)
@@ -220,10 +243,9 @@ public class EnemyController : MonoBehaviour
             path.Add(currentNode.Position);
             currentNode = currentNode.Parent;
         }
-        path.Reverse(); // Inverte para que o primeiro item da lista seja o próximo passo
+        path.Reverse(); 
         return path;
     }
-    // -----------------------------
 
     void RandomMove()
     {
