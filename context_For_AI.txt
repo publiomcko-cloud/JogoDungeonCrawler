@@ -1,0 +1,544 @@
+# AI_DEVELOPMENT_GUIDE.md
+
+**Projeto:** 3D Grid-Based Dungeon Crawler (Unity)
+
+---
+
+# PROMPT DE DIRECIONAMENTO PARA IA
+
+Você está continuando o desenvolvimento de um **jogo Dungeon Crawler 3D top-down baseado em grid** desenvolvido em **Unity + C#**.
+
+Antes de gerar qualquer código:
+
+1. Considere que **GridManager é a fonte de verdade do estado do mundo**.
+2. **Nunca use `transform.position` como fonte lógica de posição.**
+3. Toda entidade deve possuir **`Vector2Int gridPosition`**.
+4. Sempre que mover uma entidade, **atualize primeiro o grid e depois o transform**.
+5. Sempre respeite os sistemas já existentes antes de criar novos.
+6. Prefira **estender sistemas existentes** ao invés de criar novos sistemas paralelos.
+7. Não introduza dependências externas ou frameworks novos sem necessidade.
+8. Mantenha código **simples, modular e legível**.
+
+Antes de modificar qualquer script, considere:
+
+* Como o sistema atual funciona
+* Se a mudança pode quebrar o grid
+* Se a mudança pode quebrar a IA
+* Se a mudança pode deixar tiles ocupados incorretamente
+
+Se um objeto pode morrer ou desaparecer, **ele deve sempre liberar seu tile no grid**.
+
+---
+
+# 1. VISÃO GERAL DO PROJETO
+
+Tipo de jogo:
+
+**Dungeon Crawler 3D Top-Down baseado em grid**
+
+Arquitetura central:
+
+```text
+Grid lógico (2D)
+↓
+Representação visual (3D)
+```
+
+Toda lógica ocorre no grid.
+
+O mundo 3D é apenas visualização.
+
+---
+
+# 2. PRINCÍPIO FUNDAMENTAL DO PROJETO
+
+## GRID É A FONTE DA VERDADE
+
+Tudo depende do `GridManager`.
+
+O grid controla:
+
+* ocupação de tiles
+* colisão
+* posição de entidades
+* pathfinding
+* visão de inimigos
+
+Estrutura principal:
+
+```csharp
+TileType[,] tiles
+```
+
+Tipos de tile atuais:
+
+```csharp
+Empty
+Wall
+Player
+Enemy
+Item
+Water
+Lava
+```
+
+---
+
+# 3. REGRA CRÍTICA DE MOVIMENTO
+
+Toda movimentação deve seguir exatamente esta ordem:
+
+```text
+1 atualizar grid (tile antigo → Empty)
+2 atualizar gridPosition
+3 atualizar grid (tile novo → tipo da entidade)
+4 atualizar posição no mundo
+```
+
+Exemplo correto:
+
+```csharp
+GridManager.Instance.SetTile(oldX, oldY, TileType.Empty);
+
+gridPosition = newPosition;
+
+GridManager.Instance.SetTile(gridPosition.x, gridPosition.y, TileType.Enemy);
+
+UpdateWorldPosition();
+```
+
+Nunca faça:
+
+```csharp
+transform.position = ...
+```
+
+sem atualizar o grid.
+
+---
+
+# 4. CONVERSÃO GRID ↔ MUNDO
+
+Sempre usar funções do GridManager.
+
+```csharp
+GridToWorld(x,y)
+WorldToGrid(position)
+```
+
+Exemplo:
+
+```text
+Grid (10,5) → World (10,0,5)
+```
+
+Eixo Y é altura.
+
+---
+
+# 5. SISTEMAS PRINCIPAIS DO JOGO
+
+## GridManager
+
+Responsável por:
+
+* armazenar grid
+* validar tiles
+* conversões posição
+* posição do player
+
+Funções críticas:
+
+```csharp
+GetTile()
+SetTile()
+IsWalkable()
+IsInsideGrid()
+GridToWorld()
+WorldToGrid()
+```
+
+Nunca duplicar lógica de grid fora dele.
+
+---
+
+## PlayerController
+
+Responsável por:
+
+* input
+* movimentação
+* combate por contato
+
+Player atualiza:
+
+```csharp
+GridManager.PlayerPosition
+```
+
+IA dos inimigos depende disso.
+
+---
+
+## EnemyController
+
+Responsável por:
+
+* movimentação
+* IA
+* pathfinding
+* visão
+* ataque
+
+Estados atuais:
+
+```text
+Idle
+Chase
+```
+
+---
+
+## CombatStats
+
+Define:
+
+```text
+minDamage
+maxDamage
+strength
+critChance
+critMultiplier
+```
+
+Gera:
+
+```csharp
+DamageData
+```
+
+---
+
+## Health
+
+Controla vida das entidades.
+
+Funções:
+
+```csharp
+TakeDamage()
+Die()
+```
+
+Se HP chegar a 0:
+
+```csharp
+EnemyController.Die()
+```
+
+---
+
+# 6. REGRA CRÍTICA DE MORTE
+
+Quando uma entidade morre:
+
+1 liberar tile
+2 destruir objeto
+
+Exemplo:
+
+```csharp
+public void Die()
+{
+    GridManager.Instance.SetTile(gridPosition.x, gridPosition.y, TileType.Empty);
+    Destroy(gameObject);
+}
+```
+
+Isso evita **tiles bloqueados permanentemente**.
+
+---
+
+# 7. IA DOS INIMIGOS
+
+A IA possui três partes:
+
+### 1 visão
+
+Baseada em:
+
+```text
+distância
++
+linha de visão
+```
+
+Linha de visão usa:
+
+**Bresenham Line Algorithm**
+
+Bloqueado por:
+
+```text
+Wall
+```
+
+---
+
+### 2 pathfinding
+
+Algoritmo usado:
+
+**A***
+
+Heurística:
+
+```text
+Manhattan Distance
+```
+
+Movimentos permitidos:
+
+```text
+up
+down
+left
+right
+```
+
+Sem diagonais.
+
+---
+
+### 3 comportamento
+
+Estados atuais:
+
+```text
+Idle → movimento aleatório
+Chase → perseguição do player
+```
+
+---
+
+# 8. SPAWN DE INIMIGOS
+
+Gerenciado por:
+
+```text
+EnemySpawner
+```
+
+Dados definidos em:
+
+```text
+EnemyData (ScriptableObject)
+```
+
+Isso permite:
+
+* múltiplos tipos de inimigos
+* pesos de spawn
+* stats diferentes
+* prefabs diferentes
+
+---
+
+# 9. SISTEMA DE VIDA E UI
+
+Script:
+
+```text
+Health
+```
+
+UI:
+
+```text
+HealthBar
+```
+
+Atualização:
+
+```csharp
+fillImage.fillAmount = currentHP / maxHP
+```
+
+---
+
+# 10. CÂMERA
+
+Script:
+
+```text
+CameraFollow
+```
+
+Características:
+
+* segue player
+* suavização com `Lerp`
+* executa em `LateUpdate`
+
+Offset padrão:
+
+```text
+(0,20,-15)
+```
+
+---
+
+# 11. REGRAS PARA NOVOS SISTEMAS
+
+Antes de criar algo novo:
+
+1. Verifique se já existe sistema similar
+2. Prefira **extensão** ao invés de substituição
+3. Nunca modificar GridManager sem necessidade
+
+Exemplo correto:
+
+Adicionar item:
+
+```text
+TileType.Item
++
+ItemController
+```
+
+---
+
+# 12. PADRÃO DE COMPONENTES
+
+Entidades devem usar composição.
+
+Exemplo:
+
+Enemy:
+
+```text
+EnemyController
+Health
+CombatStats
+HealthBar
+```
+
+Player:
+
+```text
+PlayerController
+Health
+CombatStats
+HealthBar
+```
+
+---
+
+# 13. PADRÃO DE SCRIPTS
+
+Scripts devem ter responsabilidades claras.
+
+Evitar scripts gigantes.
+
+Preferir:
+
+```text
+EnemyController → IA
+CombatStats → dano
+Health → vida
+HealthBar → UI
+```
+
+---
+
+# 14. ERROS COMUNS A EVITAR
+
+### 1 mover objeto sem atualizar grid
+
+Isso quebra:
+
+* pathfinding
+* colisão
+* IA
+
+---
+
+### 2 destruir inimigo sem liberar tile
+
+Isso cria tiles bloqueados.
+
+---
+
+### 3 usar transform.position para lógica
+
+Sempre usar:
+
+```text
+gridPosition
+```
+
+---
+
+### 4 permitir movimento diagonal
+
+Sistema atual é **4-direções apenas**.
+
+---
+
+# 15. BOAS PRÁTICAS
+
+Preferir:
+
+```text
+Vector2Int
+```
+
+para posições lógicas.
+
+Evitar floats para grid.
+
+---
+
+# 16. EVOLUÇÕES PLANEJADAS
+
+Sistemas futuros planejados:
+
+### dungeon procedural
+
+* salas
+* corredores
+* portas
+
+---
+
+### fog of war
+
+exploração progressiva.
+
+---
+
+### sistema de turnos
+
+integração com:
+
+```text
+TurnManager
+```
+
+---
+
+### loot system
+
+* armas
+* armaduras
+* poções
+
+---
+
+### múltiplos inimigos
+
+exemplos:
+
+```text
+melee
+```

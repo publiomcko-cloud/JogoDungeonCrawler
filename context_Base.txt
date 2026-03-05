@@ -1,0 +1,514 @@
+# Contexto de Desenvolvimento — Projeto Dungeon Crawler (Unity)
+
+## 1. Visão Geral do Projeto
+
+Protótipo de **Dungeon Crawler 3D em visão top-down**, inspirado em jogos como Hyper Dungeon Crawler.
+
+O jogo utiliza movimentação baseada em **tiles (grid)** com lógica centralizada no **GridManager**, porém **os objetos e a cena são 3D**.
+
+Objetivos atuais do protótipo:
+
+* movimentação em grid
+* IA de inimigos com perseguição
+* sistema básico de combate
+* spawn procedural de inimigos
+* sistema de HP com barra de vida
+* arquitetura preparada para expansão (itens, armas, habilidades)
+
+O desenvolvimento é **cooperativo via GitHub**.
+
+Repositório:
+https://github.com/publiomcko-cloud/JogoDungeonCrawler
+
+Controle de versão usando:
+
+* Git
+* GitHub Desktop
+
+---
+
+# 2. Stack Tecnológica
+
+Engine:
+Unity
+
+Linguagem:
+C#
+
+Sistema de input:
+Unity Input System
+
+Controle de versão:
+Git + GitHub Desktop
+
+Estrutura atual de scripts:
+
+```
+Assets
+ ├─ Scripts
+ │   ├─ Core
+ │   ├─ Entities
+ │   ├─ Combat
+ │   ├─ Spawning
+ │   └─ UI
+```
+
+---
+
+# 3. Arquitetura Espacial (3D + Grid)
+
+O jogo roda em **mundo 3D**, porém a lógica utiliza um **grid 2D lógico**.
+
+Representação:
+
+```
+Grid lógico → matriz 2D
+Renderização → mundo 3D
+```
+
+Conversão entre os dois:
+
+```
+GridManager.GridToWorld(x,y)
+GridManager.WorldToGrid(position)
+```
+
+Exemplo:
+
+```
+Grid (10,5) → World (10,0,5)
+```
+
+O eixo Y do mundo é altura.
+
+---
+
+# 4. Sistema de Grid
+
+O GridManager mantém uma matriz:
+
+```
+TileType[,] grid
+```
+
+Tipos de tiles:
+
+```
+TileType
+{
+    Empty
+    Wall
+    Player
+    Enemy
+}
+```
+
+Funções principais:
+
+```
+SetTile(x,y,type)
+GetTile(x,y)
+IsWalkable(x,y)
+IsInsideGrid(x,y)
+GridToWorld(x,y)
+WorldToGrid(position)
+```
+
+Tamanho atual do grid:
+
+```
+100 x 100
+```
+
+Também existem:
+
+* paredes nas bordas do grid
+* gizmos para visualizar o grid no editor
+
+---
+
+# 5. Sistema de Movimento
+
+Movimento baseado em tiles.
+
+Cada entidade mantém sua posição lógica:
+
+```
+Vector2Int gridPosition
+```
+
+Fluxo de movimento:
+
+1. calcular tile destino
+2. verificar se é caminhável
+3. atualizar grid
+4. mover objeto no mundo 3D
+
+Atualização do grid:
+
+```
+SetTile(oldPosition, Empty)
+SetTile(newPosition, EntityType)
+```
+
+Atualização do mundo:
+
+```
+transform.position = GridToWorld(x,y)
+```
+
+---
+
+# 6. Player
+
+Script principal:
+
+```
+PlayerController
+```
+
+Responsabilidades:
+
+* ler input
+* mover no grid
+* atacar por contato
+* atualizar posição lógica
+
+Quando o player move:
+
+```
+GridManager.PlayerPosition
+```
+
+é atualizado para uso da IA dos inimigos.
+
+---
+
+# 7. Inimigos
+
+Script principal:
+
+```
+EnemyController
+```
+
+Sistema de estados simples:
+
+```
+Idle
+Chase
+```
+
+Movimento ocorre em intervalos:
+
+```
+moveInterval = 0.5s
+```
+
+### Idle
+
+Movimento aleatório.
+
+### Chase
+
+Persegue o player usando **A***.
+
+---
+
+# 8. Sistema de Visão do Inimigo
+
+Parâmetro configurável:
+
+```
+visionRange
+```
+
+Fluxo de detecção:
+
+1. verificar distância do player
+2. verificar linha de visão
+
+Linha de visão usa **algoritmo de Bresenham**.
+
+Se encontrar:
+
+```
+TileType.Wall
+```
+
+a visão é bloqueada.
+
+---
+
+# 9. Pathfinding
+
+Algoritmo utilizado:
+
+```
+A*
+```
+
+Estruturas usadas:
+
+```
+List<Vector2Int> openSet
+HashSet<Vector2Int> closedSet
+Dictionary<Vector2Int, Vector2Int> cameFrom
+Dictionary<Vector2Int, int> gScore
+```
+
+Heurística:
+
+```
+Manhattan Distance
+```
+
+Movimentos permitidos:
+
+```
+Up
+Down
+Left
+Right
+```
+
+Sem diagonais.
+
+---
+
+# 10. Sistema de Combate
+
+Combate atual:
+
+**Contato corpo a corpo**
+
+Fluxo:
+
+```
+Enemy tenta mover
+↓
+tile == Player
+↓
+AttackPlayer()
+```
+
+O ataque usa:
+
+```
+Physics.OverlapSphere
+```
+
+para detectar o player na posição 3D correspondente ao tile.
+
+---
+
+# 11. Sistema de Dano
+
+Script:
+
+```
+CombatStats
+```
+
+Define:
+
+```
+minDamage
+maxDamage
+strength
+```
+
+Gera estrutura:
+
+```
+DamageData
+```
+
+Aplicada ao script:
+
+```
+Health
+```
+
+---
+
+# 12. Sistema de Vida
+
+Script:
+
+```
+Health
+```
+
+Variáveis:
+
+```
+maxHP
+currentHP
+```
+
+Dano aplicado via:
+
+```
+TakeDamage(DamageData damage)
+```
+
+Quando HP chega a 0:
+
+```
+EnemyController.Die()
+```
+
+---
+
+# 13. Correção Crítica Implementada
+
+Problema anterior:
+
+Quando um inimigo morria, o tile permanecia marcado como **Enemy**, bloqueando movimento.
+
+Solução:
+
+```
+EnemyController.Die()
+{
+    GridManager.SetTile(gridPosition, Empty)
+    Destroy(gameObject)
+}
+```
+
+O script **Health** chama:
+
+```
+enemy.Die()
+```
+
+Isso garante consistência do grid.
+
+---
+
+# 14. Sistema de Spawn de Inimigos
+
+Script:
+
+```
+EnemySpawner
+```
+
+Suporta múltiplos tipos via:
+
+```
+EnemyData
+```
+
+EnemyData define:
+
+```
+prefab
+maxHP
+strength
+minDamage
+maxDamage
+spawnWeight
+```
+
+Seleção de inimigos usa **peso probabilístico**.
+
+Posição gerada via:
+
+```
+GetRandomFreeTile()
+```
+
+---
+
+# 15. Sistema de UI
+
+Barra de vida criada com:
+
+```
+Canvas
+Image (Filled)
+```
+
+Configuração:
+
+```
+Image Type → Filled
+Fill Method → Horizontal
+```
+
+Atualização via script:
+
+```
+fillAmount = currentHP / maxHP
+```
+
+---
+
+# 16. Estado Atual do Protótipo
+
+Funcional:
+
+✔ grid lógico 100x100
+✔ mundo 3D top-down
+✔ paredes nas bordas
+✔ player movimenta em grid
+✔ inimigos spawnam aleatoriamente
+✔ inimigos patrulham
+✔ inimigos perseguem player
+✔ pathfinding A*
+✔ sistema de visão com bloqueio por parede
+✔ combate por contato
+✔ dano variável
+✔ sistema de HP
+✔ barra de vida
+✔ liberação correta de tiles ao morrer
+
+---
+
+# 17. Próximos Sistemas Planejados
+
+Gameplay:
+
+* loot drop
+* experiência
+* level up
+* armas
+* poderes
+
+IA:
+
+* múltiplos tipos de inimigos
+* comportamentos diferentes
+
+Mundo:
+
+* geração procedural de dungeon
+* salas
+* corredores
+
+Combate:
+
+* cooldown de ataque
+* ataques especiais
+* knockback
+
+Arquitetura:
+
+* sistema de entidades
+* sistema de eventos
+* sistema de itens
+
+---
+
+# 18. Objetivo do Protótipo
+
+Criar uma base robusta para:
+
+* dungeon crawler procedural
+* combate em grid
+* IA escalável
+* sistema de progressão
+
+Arquitetura do código está sendo construída para **facilitar expansão futura sem refatorações grandes**.
