@@ -562,7 +562,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CameraFollow
   target: {fileID: 2097608932}
   offset: {x: 0, y: 20, z: -15}
-  smoothSpeed: 5
+  smoothTime: 0.25
+  enableZoom: 1
+  zoomSpeed: 2
+  minZoom: 0.4
+  maxZoom: 1.5
+  useGridBounds: 1
+  minBounds: {x: 0, y: 0}
+  maxBounds: {x: 99, y: 99}
+  avoidClipping: 1
+  obstacleLayer:
+    serializedVersion: 2
+    m_Bits: 0
+  collisionOffset: 0.5
 --- !u!1 &1926019282
 GameObject:
   m_ObjectHideFlags: 0
@@ -766,7 +778,7 @@ Transform:
   m_GameObject: {fileID: 2097608931}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 5, y: 1, z: 5}
+  m_LocalPosition: {x: 5, y: 1, z: 12.18}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -784,6 +796,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 54f25620bf853034987c5ba6a6afdca3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
+  gridPosition: {x: 0, y: 0}
+  moveSpeed: 10
+  attackInterval: 0.5
+  combatTarget: {fileID: 0}
 --- !u!136 &2097608934
 CapsuleCollider:
   m_ObjectHideFlags: 0
@@ -876,9 +892,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 79d77027cc5bb194493e9ee28c2e6354, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Health
+  baseMaxHP: 100
   maxHP: 100
   currentHP: 0
   healthBarPrefab: {fileID: 8758824405303837862, guid: 1d2921ab36d026048aec0eb4ab3bf061, type: 3}
+  damageSplashPrefab: {fileID: 0}
+  splashOffset: {x: 0, y: 1.5, z: 0}
 --- !u!114 &2097608938
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -891,11 +910,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 572883533dbccae49b29ec95ea742d52, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CombatStats
-  strength: 5
-  minDamage: 2
-  maxDamage: 5
-  critChance: 0.1
-  critMultiplier: 2
+  baseStrength: 5
+  baseMinDamage: 1
+  baseMaxDamage: 3
+  baseCritChance: 5
+  totalStrength: 0
+  totalMinDamage: 0
+  totalMaxDamage: 0
+  currentBonusHP: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
