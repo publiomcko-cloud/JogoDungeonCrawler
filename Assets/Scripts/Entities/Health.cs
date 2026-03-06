@@ -3,39 +3,40 @@ using UnityEngine;
 public class Health : MonoBehaviour
 {
     [Header("Health Settings")]
-    public int maxHP = 100;
+    public int baseMaxHP = 100; // Vida natural do personagem (sem armadura)
+    public int maxHP;           // Vida total (Base + Bónus dos Itens)
     public int currentHP;
     public bool IsDead => currentHP <= 0;
 
     [Header("UI Reference")]
-    [Tooltip("Prefab da barra de vida (CanvasHealthBar)")]
     public GameObject healthBarPrefab; 
 
     [Header("Visual Feedback")]
-    [Tooltip("Arraste o Prefab do circulo vermelho de dano aqui")]
     public GameObject damageSplashPrefab;
-    [Tooltip("Altura para o círculo não ficar afundado no chão")]
     public Vector3 splashOffset = new Vector3(0, 1.5f, 0);
 
     void Awake()
     {
-        // Garante que a vida inicie cheia
-        if (maxHP <= 0) maxHP = 1;
+        if (baseMaxHP <= 0) baseMaxHP = 1;
+        maxHP = baseMaxHP;
         if (currentHP <= 0) currentHP = maxHP;
         
-        // A SOLUÇÃO: Cria a barra de vida fisicamente no mundo 3D
         if (healthBarPrefab != null)
         {
-            // Instancia a barra de vida como "filha" do Player/Inimigo para que ela ande junto com ele
             GameObject healthBarInstance = Instantiate(healthBarPrefab, transform);
-            
-            // Procura o script HealthBar dentro da barra que acabou de nascer e liga ele a esta vida
             HealthBar barScript = healthBarInstance.GetComponentInChildren<HealthBar>();
-            if (barScript != null)
-            {
-                barScript.targetHealth = this; 
-            }
+            if (barScript != null) barScript.targetHealth = this; 
         }
+    }
+
+    // --- NOVA FUNÇÃO PARA O INVENTÁRIO ---
+    public void UpdateBonusHP(int bonusHP)
+    {
+        // Recalcula a vida máxima (Vida do corpo + Vida da armadura)
+        maxHP = baseMaxHP + bonusHP;
+        
+        // Se a vida atual ficar maior que o novo máximo (ex: tirou o elmo), ela desce para o máximo
+        if (currentHP > maxHP) currentHP = maxHP;
     }
 
     public void TakeDamage(DamageData damage)
@@ -44,39 +45,26 @@ public class Health : MonoBehaviour
 
         int finalDamage = damage.FinalDamage();
         currentHP -= finalDamage;
-        
-        // Trava a vida no mínimo zero para não bugar a UI
         if (currentHP < 0) currentHP = 0;
         
-        Debug.Log($"[{gameObject.name}] tomou {finalDamage} de dano. (HP: {currentHP})");
+        Debug.Log($"[{gameObject.name}] tomou {finalDamage} de dano. (HP: {currentHP}/{maxHP})");
 
-        // Instancia o feedback visual de forma segura
         if (damageSplashPrefab != null)
         {
             Instantiate(damageSplashPrefab, transform.position + splashOffset, Quaternion.identity);
         }
 
-        if (currentHP <= 0)
-        {
-            Die();
-        }
+        if (currentHP <= 0) Die();
     }
 
     void Die()
     {
         EnemyController enemy = GetComponent<EnemyController>();
-        if (enemy != null)
-        {
-            enemy.Die();
-        }
+        if (enemy != null) enemy.Die();
         else
         {
             PlayerController player = GetComponent<PlayerController>();
-            if (player != null)
-            {
-                // Libera o grid antes de destruir o player
-                GridManager.Instance.SetTile(player.gridPosition.x, player.gridPosition.y, TileType.Empty);
-            }
+            if (player != null) GridManager.Instance.SetTile(player.gridPosition.x, player.gridPosition.y, TileType.Empty);
             Destroy(gameObject);
         }
     }

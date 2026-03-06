@@ -27,7 +27,6 @@ public class EnemySpawner : MonoBehaviour
             selected.prefab,
             GridManager.Instance.GridToWorld(pos.x, pos.y),
             Quaternion.identity
-            
         );
 
         GridManager.Instance.SetTile(pos.x, pos.y, TileType.Enemy);
@@ -36,14 +35,21 @@ public class EnemySpawner : MonoBehaviour
         Health hp = enemyObj.GetComponent<Health>();
         CombatStats stats = enemyObj.GetComponent<CombatStats>();
 
+        // CORREÇÃO: Atualizado para a nova arquitetura de Status Base + Bónus
         if (hp != null)
-            hp.maxHP = selected.maxHP;
+        {
+            hp.baseMaxHP = selected.maxHP; // Usa a nova variável "natural"
+            hp.UpdateBonusHP(0);           // Recalcula o maxHP total (Base + 0 de armadura)
+            hp.currentHP = hp.maxHP;       // Garante que o inimigo nasce com a vida cheia
+        }
 
         if (stats != null)
         {
-            stats.strength = selected.strength;
-            stats.minDamage = selected.minDamage;
-            stats.maxDamage = selected.maxDamage;
+            stats.baseStrength = selected.strength;   // Atualizado para "base"
+            stats.baseMinDamage = selected.minDamage; // Atualizado para "base"
+            stats.baseMaxDamage = selected.maxDamage; // Atualizado para "base"
+            
+            stats.RecalculateStats(); // Força a matemática a rodar para preencher os valores Totais!
         }
     }
 
